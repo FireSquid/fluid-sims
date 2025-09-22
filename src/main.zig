@@ -30,6 +30,7 @@ pub fn main() !void {
 
     var state = State.initRand(0.5, &rng);
     var selector = ValSelector{
+        .active = false,
         .x = 10,
         .y = 50,
         .w = 200,
@@ -191,6 +192,7 @@ fn FluidState(w: u32, h: u32) type {
 }
 
 const ValSelector = struct {
+    active: bool,
     x: c_int,
     y: c_int,
     w: c_int,
@@ -204,21 +206,24 @@ const ValSelector = struct {
 
     pub fn update(self: *ValSelector) void {
         if (!ray.IsMouseButtonDown(ray.MOUSE_BUTTON_LEFT)) {
+            self.active = false;
             return;
         }
 
         const _mx = ray.GetMouseX();
         const _my = ray.GetMouseY();
 
-        if (_mx < self.x or _mx > self.x + self.w) {
+        if (!self.active and (_mx < self.x or _mx > self.x + self.w)) {
             return;
         }
-        if (_my < self.y or _my > self.y + self.h) {
+        if (!self.active and (_my < self.y or _my > self.y + self.h)) {
             return;
         }
 
-        self.mx = _mx;
-        self.my = _my;
+        self.active = true;
+
+        self.mx = std.math.clamp(_mx, self.x, self.x + self.w);
+        self.my = std.math.clamp(_my, self.y, self.y + self.h);
     }
 
     pub fn draw(self: ValSelector) void {
@@ -233,7 +238,7 @@ const ValSelector = struct {
         ray.DrawRectangle(border_x, border_end_y, self.w + 2 * border_size, border_size, ray.WHITE); // bottom
         ray.DrawRectangle(border_end_x, border_y, border_size, self.h + 2 * border_size, ray.WHITE); // right
 
-        ray.DrawCircle(self.mx, self.my, 5, ray.RED);
+        ray.DrawCircle(self.mx, self.my, 5, if (self.active) ray.RED else ray.BLUE);
     }
 
     pub fn extract(self: ValSelector) struct { f32, f32 } {
