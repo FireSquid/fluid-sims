@@ -43,6 +43,13 @@ pub fn main() !void {
         .vy_max = -4,
     };
 
+    var thread_pool: std.Thread.Pool = undefined;
+    try std.Thread.Pool.init(&thread_pool, .{
+        .allocator = alloc,
+        .n_jobs = 8,
+    });
+    defer thread_pool.deinit();
+
     while (!ray.WindowShouldClose()) {
         ray.BeginDrawing();
         defer ray.EndDrawing();
@@ -51,7 +58,7 @@ pub fn main() !void {
         selector.update();
         const temp, const chem = selector.extract();
 
-        state.update(&rng, 100000, temp, chem);
+        state.updateMulti(&rng, &thread_pool, 600, 600, temp, chem);
 
         selector.draw();
         state.draw(400, 40, 2, 5);
@@ -146,6 +153,16 @@ fn FluidState(w: u32, h: u32) type {
                     ray.DrawRectangle(c_x, c_y, c_size, c_height, ray.SKYBLUE);
                 }
             }
+        }
+
+        pub fn updateMulti(self: *@This(), rng: *PRNG, pool: *std.Thread.Pool, batch_size: u32, batch_count: u32, temp: f32, chem: f32) void {
+            var wait_group = std.Thread.WaitGroup{};
+
+            for (0..batch_count) |_| {
+                pool.spawnWg(&wait_group, @This().update, .{ self, rng, batch_size, temp, chem });
+            }
+
+            wait_group.wait();
         }
 
         pub fn update(self: *@This(), rng: *PRNG, iterations: u32, temp: f32, chem: f32) void {
