@@ -58,7 +58,7 @@ pub fn main() !void {
         selector.update();
         const temp, const chem = selector.extract();
 
-        state.updateMulti(&rng, &thread_pool, 600, 600, temp, chem);
+        state.updateMulti(&rng, &thread_pool, temp, chem);
 
         selector.draw();
         state.draw(400, 40, 2, 5);
@@ -155,54 +155,60 @@ fn FluidState(w: u32, h: u32) type {
             }
         }
 
-        pub fn updateMulti(self: *@This(), rng: *PRNG, pool: *std.Thread.Pool, batch_size: u32, batch_count: u32, temp: f32, chem: f32) void {
+        pub fn updateMulti(self: *@This(), rng: *PRNG, pool: *std.Thread.Pool, temp: f32, chem: f32) void {
             var wait_group = std.Thread.WaitGroup{};
 
-            for (0..batch_count) |_| {
-                pool.spawnWg(&wait_group, @This().update, .{ self, rng, batch_size, temp, chem });
+            for (0..width) |i_x| {
+                pool.spawnWg(&wait_group, @This().updateColumn, .{ self, rng, temp, chem, i_x });
             }
 
             wait_group.wait();
         }
 
-        pub fn update(self: *@This(), rng: *PRNG, iterations: u32, temp: f32, chem: f32) void {
-            for (0..iterations) |_| {
-                self._update(rng, temp, chem);
+        pub fn update(self: *@This(), rng: *PRNG, temp: f32, chem: f32) void {
+            for (0..width) |i_x| {
+                self.updateColumn(rng, temp, chem, i_x);
             }
         }
 
-        fn _update(self: *@This(), rng: *PRNG, temp: f32, chem: f32) void {
+        fn updateColumn(self: *@This(), rng: *PRNG, temp: f32, chem: f32, x: usize) void {
             const rand = rng.random();
 
-            const x = rand.intRangeLessThan(u32, 0, width);
-            const y = rand.intRangeLessThan(u32, 0, height);
-            const val = self.active[x][y];
+            const left = if (x == 0) width - 1 else x - 1;
+            const right = if (x == width - 1) 0 else x + 1;
 
-            var energy: f32 = 0;
-            if (x > 0 and self.active[x - 1][y]) {
-                energy += 1;
-            }
-            if (x < width - 1 and self.active[x + 1][y]) {
-                energy += 1;
-            }
-            if (y > 0 and self.active[x][y - 1]) {
-                energy += 1;
-            }
-            if (y < height - 2 and self.active[x][y + 1]) {
-                energy += 1;
-            }
+            for (0..height) |y| {
+                const val = self.active[x][y];
 
-            const delta_energy = if (val) -energy else energy;
+                const up = if (y == 0) height - 1 else y - 1;
+                const down = if (y == height - 1) 0 else y + 1;
 
-            const delta_chem = if (val) -chem else chem;
+                var energy: f32 = 0;
+                if (self.active[left][y]) {
+                    energy += 1;
+                }
+                if (self.active[right][y]) {
+                    energy += 1;
+                }
+                if (self.active[x][up]) {
+                    energy += 1;
+                }
+                if (self.active[x][down]) {
+                    energy += 1;
+                }
 
-            const q = @exp((delta_energy + delta_chem) / temp);
+                const delta_energy = if (val) -energy else energy;
 
-            const prob = q / (1 + q);
+                const delta_chem = if (val) -chem else chem;
 
-            if (rand.float(f32) < prob) {
-                self.active[x][y] = !val;
-                self.count += if (val) -1 else 1;
+                const q = @exp((delta_energy + delta_chem) / temp);
+
+                const prob = q / (1 + q);
+
+                if (rand.float(f32) < prob) {
+                    self.active[x][y] = !val;
+                    self.count += if (val) -1 else 1;
+                }
             }
         }
     };
