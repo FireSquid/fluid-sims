@@ -77,12 +77,12 @@ fn FluidState(w: u32, h: u32) type {
         pub const size = w * h;
         pub const width = w;
         pub const height = h;
-        value: ValueType,
+        active: ValueType,
         count: i32,
 
         pub fn initValue(val: bool) @This() {
             return @This(){
-                .value = .{.{val} ** height} ** width,
+                .active = .{.{val} ** height} ** width,
                 .count = if (val) size else 0,
             };
         }
@@ -90,9 +90,9 @@ fn FluidState(w: u32, h: u32) type {
         pub fn initRand(prob: f32, rng: *PRNG) @This() {
             const rand = rng.random();
 
-            var val_array: [width][height]bool = undefined;
+            var active_array: [width][height]bool = undefined;
             var cn: i32 = 0;
-            for (&val_array) |*col| {
+            for (&active_array) |*col| {
                 for (col) |*val| {
                     val.* = (rand.float(f32) < prob);
                     if (val.*) {
@@ -102,7 +102,7 @@ fn FluidState(w: u32, h: u32) type {
             }
 
             return @This(){
-                .value = val_array,
+                .active = active_array,
                 .count = cn,
             };
         }
@@ -114,15 +114,15 @@ fn FluidState(w: u32, h: u32) type {
             const _y: c_int = @intCast(y);
 
             // Border
-            const b_size: c_int = @intCast(border_size);
-            const b_x = _x - b_size;
-            const b_y = _y - b_size;
-            const b_end_x = _x + px_width;
-            const b_end_y = _y + px_height;
-            ray.DrawRectangle(b_x, b_y, px_width + 2 * b_size, b_size, ray.WHITE); // top
-            ray.DrawRectangle(b_x, b_y, b_size, px_height + 2 * b_size, ray.WHITE); // left
-            ray.DrawRectangle(b_x, b_end_y, px_width + 2 * b_size, b_size, ray.WHITE); // bottom
-            ray.DrawRectangle(b_end_x, b_y, b_size, px_height + 2 * b_size, ray.WHITE); // right
+            const _border_size: c_int = @intCast(border_size);
+            const border_x = _x - _border_size;
+            const border_y = _y - _border_size;
+            const border_end_x = _x + px_width;
+            const border_end_y = _y + px_height;
+            ray.DrawRectangle(border_x, border_y, px_width + 2 * _border_size, _border_size, ray.WHITE); // top
+            ray.DrawRectangle(border_x, border_y, _border_size, px_height + 2 * _border_size, ray.WHITE); // left
+            ray.DrawRectangle(border_x, border_end_y, px_width + 2 * _border_size, _border_size, ray.WHITE); // bottom
+            ray.DrawRectangle(border_end_x, border_y, _border_size, px_height + 2 * _border_size, ray.WHITE); // right
 
             // Cells
             const c_size: c_int = @intCast(cell_size);
@@ -130,9 +130,9 @@ fn FluidState(w: u32, h: u32) type {
                 const c_x = _x + @as(c_int, @intCast(i_x)) * c_size;
                 var offset_y: c_int = -1;
                 for (0..height) |i_y| {
-                    if (offset_y < 0 and self.value[i_x][i_y]) {
+                    if (offset_y < 0 and self.active[i_x][i_y]) {
                         offset_y = @intCast(i_y);
-                    } else if (offset_y >= 0 and !self.value[i_x][i_y]) {
+                    } else if (offset_y >= 0 and !self.active[i_x][i_y]) {
                         const c_height: c_int = (@as(c_int, @intCast(i_y)) - offset_y) * c_size;
                         const c_y = _y + offset_y * c_size;
                         ray.DrawRectangle(c_x, c_y, c_size, c_height, ray.SKYBLUE);
@@ -158,19 +158,19 @@ fn FluidState(w: u32, h: u32) type {
 
             const x = rand.intRangeLessThan(u32, 0, width);
             const y = rand.intRangeLessThan(u32, 0, height);
-            const val = self.value[x][y];
+            const val = self.active[x][y];
 
             var energy: f32 = 0;
-            if (x > 0 and self.value[x - 1][y]) {
+            if (x > 0 and self.active[x - 1][y]) {
                 energy += 1;
             }
-            if (x < width - 1 and self.value[x + 1][y]) {
+            if (x < width - 1 and self.active[x + 1][y]) {
                 energy += 1;
             }
-            if (y > 0 and self.value[x][y - 1]) {
+            if (y > 0 and self.active[x][y - 1]) {
                 energy += 1;
             }
-            if (y < height - 2 and self.value[x][y + 1]) {
+            if (y < height - 2 and self.active[x][y + 1]) {
                 energy += 1;
             }
 
@@ -183,7 +183,7 @@ fn FluidState(w: u32, h: u32) type {
             const prob = q / (1 + q);
 
             if (rand.float(f32) < prob) {
-                self.value[x][y] = !val;
+                self.active[x][y] = !val;
                 self.count += if (val) -1 else 1;
             }
         }
@@ -223,15 +223,15 @@ const ValSelector = struct {
 
     pub fn draw(self: ValSelector) void {
         // border
-        const b_size: c_int = 3;
-        const b_x = self.x - b_size;
-        const b_y = self.y - b_size;
-        const b_end_x = self.x + self.w;
-        const b_end_y = self.y + self.h;
-        ray.DrawRectangle(b_x, b_y, self.w + 2 * b_size, b_size, ray.WHITE); // top
-        ray.DrawRectangle(b_x, b_y, b_size, self.h + 2 * b_size, ray.WHITE); // left
-        ray.DrawRectangle(b_x, b_end_y, self.w + 2 * b_size, b_size, ray.WHITE); // bottom
-        ray.DrawRectangle(b_end_x, b_y, b_size, self.h + 2 * b_size, ray.WHITE); // right
+        const border_size: c_int = 3;
+        const border_x = self.x - border_size;
+        const border_y = self.y - border_size;
+        const border_end_x = self.x + self.w;
+        const border_end_y = self.y + self.h;
+        ray.DrawRectangle(border_x, border_y, self.w + 2 * border_size, border_size, ray.WHITE); // top
+        ray.DrawRectangle(border_x, border_y, border_size, self.h + 2 * border_size, ray.WHITE); // left
+        ray.DrawRectangle(border_x, border_end_y, self.w + 2 * border_size, border_size, ray.WHITE); // bottom
+        ray.DrawRectangle(border_end_x, border_y, border_size, self.h + 2 * border_size, ray.WHITE); // right
 
         ray.DrawCircle(self.mx, self.my, 5, ray.RED);
     }
