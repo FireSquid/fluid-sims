@@ -86,12 +86,10 @@ fn FluidState(w: u32, h: u32) type {
         pub const width = w;
         pub const height = h;
         active: ValueType,
-        count: i32,
 
         pub fn initValue(val: bool) @This() {
             return @This(){
                 .active = .{.{val} ** height} ** width,
-                .count = if (val) size else 0,
             };
         }
 
@@ -111,7 +109,6 @@ fn FluidState(w: u32, h: u32) type {
 
             return @This(){
                 .active = active_array,
-                .count = cn,
             };
         }
 
@@ -207,7 +204,6 @@ fn FluidState(w: u32, h: u32) type {
 
                 if (rand.float(f32) < prob) {
                     self.active[x][y] = !val;
-                    self.count += if (val) -1 else 1;
                 }
             }
         }
